@@ -485,9 +485,269 @@ function FlowStep({ a, isLast }: { a: AgentState; isLast: boolean }) {
   );
 }
 
+// ─── Chat Panel ───────────────────────────────────────────────────────────────
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  sources?: { block_id?: string; section_title?: string; page_number?: number; text_snippet: string; source_type: string }[];
+  ts: number;
+}
+
+const SUGGESTED = [
+  "What are the main topics covered in this document?",
+  "Summarise the key sections and their content",
+  "What tables are in this document and what do they contain?",
+  "List all the learning objectives or outcomes mentioned",
+  "What assessment methods are described?",
+];
+
+function ChatPanel({ docId }: { docId: string | null }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const msgIdRef = useRef(0);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
+
+  const sendMessage = async (question: string) => {
+    if (!docId || !question.trim() || loading) return;
+    const q = question.trim();
+    setInput("");
+    const userMsg: ChatMessage = { id: String(++msgIdRef.current), role: "user", text: q, ts: Date.now() };
+    setMessages(prev => [...prev, userMsg]);
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/api/documents/${docId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q, max_context_blocks: 20 }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      setMessages(prev => [...prev, {
+        id: String(++msgIdRef.current),
+        role: "assistant",
+        text: data.answer,
+        sources: data.sources || [],
+        ts: Date.now(),
+      }]);
+    } catch (e) {
+      setMessages(prev => [...prev, {
+        id: String(++msgIdRef.current), role: "assistant",
+        text: `Error: Could not get a response. ${String(e)}`, ts: Date.now(),
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
+  };
+
+  if (!docId) return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12, padding: 24 }}>
+      <div style={{ width: 42, height: 42, borderRadius: 12, background: "linear-gradient(135deg,#7c3aed22,#2563eb22)", border: "1px solid #1e2d3d", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: 18 }}>💬</span>
+      </div>
+      <div style={{ fontSize: 12, color: "#1e2d3d", textAlign: "center", lineHeight: 2 }}>
+        Process a document to<br />start asking questions
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Messages area */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 14 }}>
+
+        {/* Welcome + suggestions */}
+        {messages.length === 0 && (
+          <div style={{ animation: "fadeSlide .3s ease" }}>
+            <div style={{ background: "linear-gradient(135deg,#0a0e1a,#0d1525)", border: "1px solid #1e2d3d", borderRadius: 12, padding: "16px 18px", marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#818cf8", marginBottom: 6 }}>Ask anything about this document</div>
+              <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.7 }}>
+                I have access to all extracted text, sections, tables, and references. Ask about specific topics, request summaries, or explore linked data.
+              </div>
+            </div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#1e2d3d", textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 8 }}>
+              Suggested questions
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              {SUGGESTED.map((q, i) => (
+                <button key={i} onClick={() => sendMessage(q)} style={{
+                  textAlign: "left", padding: "8px 12px", borderRadius: 8,
+                  background: "transparent", border: "1px solid #0d1825",
+                  color: "#4b5870", fontSize: 11, cursor: "pointer", lineHeight: 1.5,
+                  transition: "all .15s",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "#0a1020"; e.currentTarget.style.color = "#94a3b8"; e.currentTarget.style.borderColor = "#1e2d3d"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#4b5470"; e.currentTarget.style.borderColor = "#0d1825"; }}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Conversation */}
+        {messages.map(msg => (
+          <div key={msg.id} style={{ animation: "fadeSlide .22s ease" }}>
+            {msg.role === "user" ? (
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <div style={{
+                  maxWidth: "85%", padding: "9px 14px", borderRadius: "12px 12px 3px 12px",
+                  background: "linear-gradient(135deg,#1d4ed8,#4338ca)",
+                  color: "#e2e8f0", fontSize: 12, lineHeight: 1.6,
+                  boxShadow: "0 2px 12px #1d4ed830",
+                }}>{msg.text}</div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+                {/* AI Avatar */}
+                <div style={{ width: 26, height: 26, borderRadius: 7, background: "linear-gradient(135deg,#7c3aed,#2563eb)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                  <div style={{ width: 10, height: 10, borderRadius: 2, background: "rgba(255,255,255,0.85)" }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* Answer text */}
+                  <div style={{
+                    background: "#060c18", border: "1px solid #0d1825", borderRadius: "3px 12px 12px 12px",
+                    padding: "12px 15px", fontSize: 12, color: "#cbd5e1", lineHeight: 1.8,
+                    whiteSpace: "pre-wrap",
+                  }}>
+                    {msg.text}
+                  </div>
+
+                  {/* Sources */}
+                  {msg.sources && msg.sources.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: "#1e2d3d", textTransform: "uppercase", letterSpacing: "0.7px", marginBottom: 5 }}>
+                        Sources
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {msg.sources.slice(0, 5).map((s, i) => (
+                          <div key={i} style={{
+                            display: "flex", gap: 8, alignItems: "flex-start",
+                            background: "#04090f", border: "1px solid #0d1825",
+                            borderRadius: 7, padding: "6px 10px",
+                            borderLeft: `2px solid ${s.source_type === "section" ? "#818cf8" : s.source_type === "table" ? "#4ade80" : "#38bdf8"}`,
+                          }}>
+                            <span style={{
+                              fontSize: 8, fontWeight: 800, padding: "1px 5px", borderRadius: 3, flexShrink: 0, marginTop: 1,
+                              background: s.source_type === "section" ? "#818cf820" : s.source_type === "table" ? "#4ade8020" : "#38bdf820",
+                              color: s.source_type === "section" ? "#818cf8" : s.source_type === "table" ? "#4ade80" : "#38bdf8",
+                              textTransform: "uppercase",
+                            }}>
+                              {s.source_type}
+                            </span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 10, color: "#4b5870", lineHeight: 1.5, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                                {s.text_snippet}
+                              </div>
+                              {s.page_number && (
+                                <span style={{ fontSize: 9, color: "#1e2d3d" }}>Page {s.page_number}</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 9, color: "#0d1825", marginTop: 4 }}>
+                    {new Date(msg.ts).toLocaleTimeString()}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Thinking indicator */}
+        {loading && (
+          <div style={{ display: "flex", gap: 9, alignItems: "flex-start", animation: "fadeSlide .2s ease" }}>
+            <div style={{ width: 26, height: 26, borderRadius: 7, background: "linear-gradient(135deg,#7c3aed,#2563eb)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <div style={{ width: 10, height: 10, borderRadius: 2, background: "rgba(255,255,255,0.85)" }} />
+            </div>
+            <div style={{ background: "#060c18", border: "1px solid #0d1825", borderRadius: "3px 12px 12px 12px", padding: "12px 16px", display: "flex", gap: 5, alignItems: "center" }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{
+                  width: 6, height: 6, borderRadius: "50%", background: "#818cf8",
+                  animation: "pulse 1.4s ease-in-out infinite",
+                  animationDelay: `${i * 0.2}s`,
+                }} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Clear button + input */}
+      {messages.length > 0 && (
+        <div style={{ padding: "0 14px 4px", display: "flex", justifyContent: "flex-end" }}>
+          <button onClick={() => setMessages([])} style={{
+            fontSize: 10, color: "#1e2d3d", background: "transparent", border: "none", cursor: "pointer",
+            padding: "2px 6px", borderRadius: 4, transition: "color .15s",
+          }}
+            onMouseEnter={e => (e.currentTarget.style.color = "#475569")}
+            onMouseLeave={e => (e.currentTarget.style.color = "#1e2d3d")}
+          >
+            Clear chat
+          </button>
+        </div>
+      )}
+
+      {/* Input box */}
+      <div style={{ padding: "8px 14px 12px", borderTop: "1px solid #0d1117", flexShrink: 0 }}>
+        <div style={{ position: "relative", background: "#060c18", border: "1px solid #1e2d3d", borderRadius: 10, transition: "border-color .2s" }}
+          onFocusCapture={e => (e.currentTarget.style.borderColor = "#2563eb")}
+          onBlurCapture={e => (e.currentTarget.style.borderColor = "#1e2d3d")}
+        >
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder="Ask about the document… (Enter to send, Shift+Enter for newline)"
+            rows={3}
+            style={{
+              width: "100%", background: "transparent", border: "none", outline: "none",
+              color: "#e2e8f0", fontSize: 12, lineHeight: 1.6, resize: "none",
+              padding: "10px 44px 10px 12px", fontFamily: "inherit",
+            }}
+          />
+          <button
+            onClick={() => sendMessage(input)}
+            disabled={!input.trim() || loading}
+            style={{
+              position: "absolute", right: 8, bottom: 8, width: 30, height: 30,
+              borderRadius: 8, border: "none", cursor: input.trim() && !loading ? "pointer" : "default",
+              background: input.trim() && !loading ? "linear-gradient(135deg,#1d4ed8,#7c3aed)" : "#0d1825",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "all .2s", boxShadow: input.trim() && !loading ? "0 0 10px #3b82f650" : "none",
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={input.trim() && !loading ? "white" : "#1e2d3d"} strokeWidth="2.5">
+              <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          </button>
+        </div>
+        <div style={{ fontSize: 9, color: "#0d1825", marginTop: 5, textAlign: "center" }}>
+          Answers grounded in document text · Sources cited above each response
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Output Panel ────────────────────────────────────────────────────────────
 function OutputPanel({ docId }: { docId: string | null }) {
-  const [tab, setTab] = useState<"sections" | "tables" | "refs" | "quality">("sections");
+  const [tab, setTab] = useState<"chat" | "sections" | "tables" | "refs" | "quality">("chat");
   const [sections, setSections] = useState<any[]>([]);
   const [tables, setTables] = useState<any[]>([]);
   const [refs, setRefs] = useState<any[]>([]);
@@ -513,6 +773,7 @@ function OutputPanel({ docId }: { docId: string | null }) {
   );
 
   const tabs = [
+    { k: "chat" as const, l: "Chat" },
     { k: "sections" as const, l: `Sections (${sections.length})` },
     { k: "tables" as const, l: `Tables (${tables.length})` },
     { k: "refs" as const, l: `Refs (${refs.length})` },
@@ -521,106 +782,113 @@ function OutputPanel({ docId }: { docId: string | null }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ display: "flex", padding: "8px 12px", gap: 3, borderBottom: "1px solid #0d1117", flexShrink: 0 }}>
+      <div style={{ display: "flex", padding: "8px 12px", gap: 3, borderBottom: "1px solid #0d1117", flexShrink: 0, flexWrap: "wrap" }}>
         {tabs.map(t => (
           <button key={t.k} onClick={() => setTab(t.k)} style={{
             padding: "4px 10px", borderRadius: 5, fontSize: 10, fontWeight: 600,
             border: "1px solid", cursor: "pointer", transition: "all .2s",
-            background: tab === t.k ? "rgba(99,102,241,.12)" : "transparent",
-            borderColor: tab === t.k ? "rgba(99,102,241,.35)" : "#1e2535",
-            color: tab === t.k ? "#818cf8" : "#374151",
+            background: tab === t.k ? (t.k === "chat" ? "rgba(37,99,235,.12)" : "rgba(99,102,241,.12)") : "transparent",
+            borderColor: tab === t.k ? (t.k === "chat" ? "rgba(37,99,235,.35)" : "rgba(99,102,241,.35)") : "#1e2535",
+            color: tab === t.k ? (t.k === "chat" ? "#60a5fa" : "#818cf8") : "#374151",
           }}>{t.l}</button>
         ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px" }}>
-        {tab === "sections" && (sections.length === 0
-          ? <p style={{ color: "#374151", fontSize: 12, textAlign: "center", paddingTop: 24 }}>No sections</p>
-          : sections.map(s => (
-            <div key={s.section_id} style={{
-              padding: `6px 0 6px ${Math.max((s.level - 1) * 12, 0)}px`,
-              borderBottom: "1px solid #0d1117"
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {s.heading_number && (
+      {/* Chat tab — full height */}
+      {tab === "chat" && <ChatPanel docId={docId} />}
+
+      {tab !== "chat" && (
+        <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px" }}>
+          {tab === "sections" && (sections.length === 0
+            ? <p style={{ color: "#374151", fontSize: 12, textAlign: "center", paddingTop: 24 }}>No sections</p>
+            : sections.map(s => (
+              <div key={s.section_id} style={{
+                padding: `6px 0 6px ${Math.max((s.level - 1) * 12, 0)}px`,
+                borderBottom: "1px solid #0d1117"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {s.heading_number && (
+                    <span style={{
+                      fontFamily: "monospace", fontSize: 9, color: "#374151",
+                      background: "#060c18", padding: "1px 5px", borderRadius: 3, flexShrink: 0
+                    }}>
+                      {s.heading_number}
+                    </span>
+                  )}
                   <span style={{
-                    fontFamily: "monospace", fontSize: 9, color: "#374151",
-                    background: "#060c18", padding: "1px 5px", borderRadius: 3, flexShrink: 0
+                    fontSize: s.level === 1 ? 12.5 : 11, fontWeight: s.level <= 2 ? 600 : 400,
+                    color: s.level === 1 ? "#e2e8f0" : s.level === 2 ? "#94a3b8" : "#4b5870", flex: 1
                   }}>
-                    {s.heading_number}
+                    {s.title}
                   </span>
-                )}
-                <span style={{
-                  fontSize: s.level === 1 ? 12.5 : 11, fontWeight: s.level <= 2 ? 600 : 400,
-                  color: s.level === 1 ? "#e2e8f0" : s.level === 2 ? "#94a3b8" : "#4b5870", flex: 1
-                }}>
-                  {s.title}
-                </span>
-                <span style={{ fontSize: 9, color: "#1e2d3d", flexShrink: 0 }}>p{s.start_page}–{s.end_page}</span>
-              </div>
-            </div>
-          ))
-        )}
-
-        {tab === "tables" && (tables.length === 0
-          ? <p style={{ color: "#374151", fontSize: 12, textAlign: "center", paddingTop: 24 }}>No tables</p>
-          : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {tables.map(t => (
-              <div key={t.table_id} style={{ background: "#060c18", border: "1px solid #0d2218", borderRadius: 8, padding: "10px 12px" }}>
-                <div style={{ fontWeight: 700, fontSize: 12, color: "#4ade80", marginBottom: 3 }}>
-                  {t.caption || `Table ${t.table_number || t.table_id.slice(0, 8)}`}
+                  <span style={{ fontSize: 9, color: "#1e2d3d", flexShrink: 0 }}>p{s.start_page}–{s.end_page}</span>
                 </div>
-                <div style={{ fontSize: 10, color: "#374151" }}>{t.row_count}×{t.column_count} · Page {t.start_page}</div>
-                <div style={{ marginTop: 6 }}><ConfBar v={t.confidence_score || 1} height={3} /></div>
               </div>
-            ))}
-          </div>
-        )}
+            ))
+          )}
 
-        {tab === "refs" && (refs.length === 0
-          ? <p style={{ color: "#374151", fontSize: 12, textAlign: "center", paddingTop: 24 }}>No references</p>
-          : refs.map(r => (
-            <div key={r.ref_id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #0d1117" }}>
-              <span style={{ fontSize: 10, color: r.is_resolved ? "#4ade80" : "#f87171", fontWeight: 700, flexShrink: 0 }}>
-                {r.is_resolved ? "Resolved" : "Unresolved"}
-              </span>
-              <span style={{ fontSize: 11, color: "#e2e8f0", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {r.ref_text}
-              </span>
-              <span style={{ fontSize: 9, color: "#374151", flexShrink: 0 }}>{r.ref_type}</span>
-            </div>
-          ))
-        )}
-
-        {tab === "quality" && !quality && (
-          <p style={{ color: "#374151", fontSize: 12, textAlign: "center", paddingTop: 24 }}>Quality report not available</p>
-        )}
-        {tab === "quality" && quality && (
-          <div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 12 }}>
-              {[["Critical", quality.critical, "#ef4444"], ["High", quality.high, "#f59e0b"], ["Total", quality.total_flags, "#60a5fa"]].map(([l, v, c]) => (
-                <div key={String(l)} style={{ background: "#060c18", border: `1px solid ${String(c)}25`, borderRadius: 8, padding: "10px 6px", textAlign: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: String(c) }}>{String(v)}</div>
-                  <div style={{ fontSize: 9, color: "#374151", marginTop: 1 }}>{String(l)}</div>
+          {tab === "tables" && (tables.length === 0
+            ? <p style={{ color: "#374151", fontSize: 12, textAlign: "center", paddingTop: 24 }}>No tables</p>
+            : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {tables.map(t => (
+                <div key={t.table_id} style={{ background: "#060c18", border: "1px solid #0d2218", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontWeight: 700, fontSize: 12, color: "#4ade80", marginBottom: 3 }}>
+                    {t.caption || `Table ${t.table_number || t.table_id.slice(0, 8)}`}
+                  </div>
+                  <div style={{ fontSize: 10, color: "#374151" }}>{t.row_count}×{t.column_count} · Page {t.start_page}</div>
+                  <div style={{ marginTop: 6 }}><ConfBar v={t.confidence_score || 1} height={3} /></div>
                 </div>
               ))}
             </div>
-            {quality.gemini_assessment && (
-              <div style={{ background: "#0a0618", border: "1px solid #2d1f5e", borderRadius: 8, padding: "12px 14px", borderLeft: "3px solid #7c3aed" }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: "#5b21b6", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 8 }}>
-                  Gemini Risk Assessment
-                </div>
-                <div style={{ fontSize: 11.5, color: "#c4b5fd", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
-                  {quality.gemini_assessment}
-                </div>
+          )}
+
+          {tab === "refs" && (refs.length === 0
+            ? <p style={{ color: "#374151", fontSize: 12, textAlign: "center", paddingTop: 24 }}>No references</p>
+            : refs.map(r => (
+              <div key={r.ref_id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #0d1117" }}>
+                <span style={{ fontSize: 10, color: r.is_resolved ? "#4ade80" : "#f87171", fontWeight: 700, flexShrink: 0 }}>
+                  {r.is_resolved ? "Resolved" : "Unresolved"}
+                </span>
+                <span style={{ fontSize: 11, color: "#e2e8f0", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {r.ref_text}
+                </span>
+                <span style={{ fontSize: 9, color: "#374151", flexShrink: 0 }}>{r.ref_type}</span>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+            ))
+          )}
+
+          {tab === "quality" && !quality && (
+            <p style={{ color: "#374151", fontSize: 12, textAlign: "center", paddingTop: 24 }}>Quality report not available</p>
+          )}
+          {tab === "quality" && quality && (
+            <div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 12 }}>
+                {[["Critical", quality.critical, "#ef4444"], ["High", quality.high, "#f59e0b"], ["Total", quality.total_flags, "#60a5fa"]].map(([l, v, c]) => (
+                  <div key={String(l)} style={{ background: "#060c18", border: `1px solid ${String(c)}25`, borderRadius: 8, padding: "10px 6px", textAlign: "center" }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: String(c) }}>{String(v)}</div>
+                    <div style={{ fontSize: 9, color: "#374151", marginTop: 1 }}>{String(l)}</div>
+                  </div>
+                ))}
+              </div>
+              {quality.gemini_assessment && (
+                <div style={{ background: "#0a0618", border: "1px solid #2d1f5e", borderRadius: 8, padding: "12px 14px", borderLeft: "3px solid #7c3aed" }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#5b21b6", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 8 }}>
+                    Gemini Risk Assessment
+                  </div>
+                  <div style={{ fontSize: 11.5, color: "#c4b5fd", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
+                    {quality.gemini_assessment}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+
+
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 export default function HomePage() {

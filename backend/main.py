@@ -167,6 +167,52 @@ def process_path(body: dict, background_tasks: BackgroundTasks):
 
 
 # ═══════════════════════════════════════════════════════════════
+# RAG Chat — NotebookLM-style Q&A over processed documents
+# ═══════════════════════════════════════════════════════════════
+
+from rag_chat import ChatRequest, ChatResponse, answer_question
+
+# In-memory chat history per document (cleared on restart; fine for demo)
+_chat_histories: dict[str, list[dict]] = {}
+
+@app.post("/api/documents/{document_id}/chat", response_model=ChatResponse)
+def chat_with_document(document_id: str, req: ChatRequest):
+    """Ask a question grounded in the document's extracted text, sections, and tables."""
+    db: Session = SessionLocal()
+    try:
+        doc = db.get(Document, document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+        if doc.status not in ("complete", "processing"):
+            raise HTTPException(status_code=400, detail=f"Document not ready (status={doc.status})")
+    finally:
+        db.close()
+
+    response = answer_question(document_id, req.question, req.max_context_blocks)
+
+    # Store in history
+    history = _chat_histories.setdefault(document_id, [])
+    history.append({"question": req.question, "answer": response.answer, "sources": [s.dict() for s in response.sources]})
+
+    return response
+
+
+@app.get("/api/documents/{document_id}/chat/history")
+def get_chat_history(document_id: str):
+    """Return the in-memory chat history for a document."""
+    return _chat_histories.get(document_id, [])
+
+
+@app.delete("/api/documents/{document_id}/chat/history")
+def clear_chat_history(document_id: str):
+    """Clear chat history for a document."""
+    _chat_histories.pop(document_id, None)
+    return {"cleared": True}
+
+
+
+
+# ═══════════════════════════════════════════════════════════════
 # Document REST APIs (unchanged)
 # ═══════════════════════════════════════════════════════════════
 
