@@ -35,12 +35,14 @@ app.add_middleware(
 )
 
 
+_UPLOAD_DIR = "/tmp/storage/uploads" if os.getenv("VERCEL") else "storage/uploads"
+
 @app.on_event("startup")
 def startup():
     init_db()
-    os.makedirs("storage/pdfs", exist_ok=True)
-    os.makedirs("storage/page_images", exist_ok=True)
-    os.makedirs("storage/uploads", exist_ok=True)
+    os.makedirs(config.PDF_STORAGE_DIR, exist_ok=True)
+    os.makedirs(config.PAGE_IMAGE_DIR, exist_ok=True)
+    os.makedirs(_UPLOAD_DIR, exist_ok=True)
 
 
 # ── Health ──────────────────────────────────────────────────────────────────
@@ -71,7 +73,7 @@ async def agent_upload(background_tasks: BackgroundTasks, file: UploadFile = Fil
     """Upload PDF and trigger multi-agent pipeline; returns job_id."""
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
-    upload_dir = Path("storage/uploads")
+    upload_dir = Path(_UPLOAD_DIR)
     upload_dir.mkdir(parents=True, exist_ok=True)
     path = str(upload_dir / file.filename)
     content = await file.read()

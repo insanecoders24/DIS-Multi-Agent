@@ -7,7 +7,9 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///storage/dis.db")
+from config import DB_PATH
+
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
 
 engine = create_engine(
     DATABASE_URL,
@@ -31,6 +33,4 @@ def get_db():
 
 def init_db():
     """Create all tables. Called at startup."""
-    os.makedirs("storage/pdfs", exist_ok=True)
-    os.makedirs("storage/page_images", exist_ok=True)
     Base.metadata.create_all(bind=engine)

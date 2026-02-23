@@ -4,12 +4,16 @@ Changing behavior requires an intentional edit here (no hidden model states).
 This file is version-controlled; each run references the config version.
 """
 
+import os
+
 DIS_VERSION = "1.0.0"
 
+_BASE_DIR = "/tmp/storage" if os.getenv("VERCEL") else "storage"
+
 # ── Storage ──────────────────────────────────────────────────────────────────
-PDF_STORAGE_DIR = "storage/pdfs"
-DB_PATH = "storage/dis.db"
-PAGE_IMAGE_DIR = "storage/page_images"
+PDF_STORAGE_DIR = f"{_BASE_DIR}/pdfs"
+DB_PATH = f"{_BASE_DIR}/dis.db"
+PAGE_IMAGE_DIR = f"{_BASE_DIR}/page_images"
 
 # ── Page Normalization ────────────────────────────────────────────────────────
 PAGE_IMAGE_DPI = 150            # Render resolution for page thumbnails/overlays
