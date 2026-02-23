@@ -225,6 +225,21 @@ def answer_question(document_id: str, question: str, max_blocks: int = 20) -> Ch
         # Retrieve context
         blocks, sections, tables = retrieve_context(document_id, question, max_blocks, db)
 
+        # Guard: if no blocks were extracted, document needs re-processing
+        if not blocks:
+            return ChatResponse(
+                answer=(
+                    "⚠️ This document has no extracted text blocks yet.\n\n"
+                    "This happens when the document was processed before the extraction engine was updated. "
+                    "Please **re-upload the PDF** to trigger a fresh pipeline run — after that, all text, "
+                    "sections, and tables will be available for Q&A.\n\n"
+                    f"Document: *{doc_title}*\n"
+                    f"Sections in DB: {len(sections)} · Tables in DB: {len(tables)}"
+                ),
+                sources=[],
+                token_count_estimate=0,
+            )
+
         # Build prompt
         prompt = build_context_prompt(question, blocks, sections, tables, doc_title)
 

@@ -183,8 +183,7 @@ def chat_with_document(document_id: str, req: ChatRequest):
         doc = db.get(Document, document_id)
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
-        if doc.status not in ("complete", "processing"):
-            raise HTTPException(status_code=400, detail=f"Document not ready (status={doc.status})")
+        # Allow chat on any document that exists — complete, processing, or human_review
     finally:
         db.close()
 
