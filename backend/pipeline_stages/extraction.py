@@ -5,11 +5,10 @@ Extracts words/spans from each page as the raw text layer.
 For text-based PDFs: PyMuPDF direct extraction (precise, coordinates included).
 For image-only pages: flag for OCR (pytesseract if available, else mark as needs_ocr).
 
-This stage adds NO structural interpretaton — it only surfaces text + coordinates.
+This stage adds NO structural interpretation — it only surfaces text + coordinates.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Optional
 import fitz
 import config
 
@@ -56,6 +55,11 @@ def extract_page_text(pdf_path: str, page_record) -> RawPageText:
     Returns a RawPageText with all spans sorted deterministically:
     top-to-bottom (y0 ascending), left-to-right (x0 ascending).
     This ordering is the foundation for stable block IDs downstream.
+
+    Strategy:
+      1. Try rawdict extraction (preserves full font metadata).
+      2. If rawdict yields 0 spans (common with ReportLab / XObject PDFs),
+         fall back to 'words' extractor which always returns word bounding boxes.
     """
     result = RawPageText(
         page_id=page_record.page_id,
@@ -67,37 +71,52 @@ def extract_page_text(pdf_path: str, page_record) -> RawPageText:
     pg = pdf_doc[page_record.page_number - 1]
 
     if page_record.has_text:
-        # Native text extraction — returns dict with blocks→lines→spans
+        # ── Pass 1: rawdict — full font metadata ─────────────────────────────
         raw = pg.get_text("rawdict", flags=fitz.TEXT_PRESERVE_LIGATURES | fitz.TEXT_PRESERVE_WHITESPACE)
         for blk in raw.get("blocks", []):
-            if blk.get("type") != 0:  # skip image blocks at this stage
+            if blk.get("type") != 0:  # skip image blocks
                 continue
             for line in blk.get("lines", []):
                 for sp in line.get("spans", []):
                     text = sp.get("text", "").strip()
                     if not text:
                         continue
-                    bbox = sp.get("bbox", (0, 0, 0, 0))
-                    flags = sp.get("flags", 0)
+                    bbox    = sp.get("bbox", (0, 0, 0, 0))
+                    flags   = sp.get("flags", 0)
                     is_bold, is_italic = _pymupdf_flags(flags)
-                    font_name = sp.get("font", "")
-                    font_size = round(sp.get("size", 10.0), 2)
+                    result.spans.append(RawSpan(
+                        text=text,
+                        x0=bbox[0], y0=bbox[1], x1=bbox[2], y1=bbox[3],
+                        font_name=sp.get("font", ""),
+                        font_size=round(sp.get("size", 10.0), 2),
+                        is_bold=is_bold,
+                        is_italic=is_italic,
+                        flags=flags,
+                        confidence=1.0,
+                        origin="native",
+                    ))
 
-                    result.spans.append(
-                        RawSpan(
-                            text=text,
-                            x0=bbox[0], y0=bbox[1], x1=bbox[2], y1=bbox[3],
-                            font_name=font_name,
-                            font_size=font_size,
-                            is_bold=is_bold,
-                            is_italic=is_italic,
-                            flags=flags,
-                            confidence=1.0,
-                            origin="native",
-                        )
-                    )
+        # ── Pass 2 fallback: 'words' extractor ───────────────────────────────
+        # ReportLab and XObject-based PDFs frequently produce 0 rawdict spans
+        # even though the page has fully embedded text. The 'words' extractor
+        # handles these correctly and always returns individual word bounding boxes.
+        if not result.spans:
+            for word_tuple in pg.get_text("words"):
+                # tuple layout: (x0, y0, x1, y1, "word", block_no, line_no, word_no)
+                x0, y0, x1, y1, word = word_tuple[:5]
+                word = str(word).strip()
+                if not word:
+                    continue
+                result.spans.append(RawSpan(
+                    text=word,
+                    x0=float(x0), y0=float(y0), x1=float(x1), y1=float(y1),
+                    font_name="", font_size=10.0,
+                    is_bold=False, is_italic=False,
+                    flags=0, confidence=1.0, origin="native",
+                ))
+
     else:
-        # Image-only page: try pytesseract if available
+        # ── Image-only page: OCR via pytesseract ─────────────────────────────
         result.ocr_applied = True
         try:
             import pytesseract
@@ -105,7 +124,6 @@ def extract_page_text(pdf_path: str, page_record) -> RawPageText:
             pix = pg.get_pixmap(matrix=fitz.Matrix(2, 2))
             img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             ocr_data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT, lang="eng")
-            # Scale factor: PyMuPDF internal coords → screen coords back to PDF pts
             scale = pg.rect.width / pix.width
             for i, word in enumerate(ocr_data["text"]):
                 word = str(word).strip()
@@ -118,20 +136,16 @@ def extract_page_text(pdf_path: str, page_record) -> RawPageText:
                 y0 = ocr_data["top"][i] * scale
                 x1 = x0 + ocr_data["width"][i] * scale
                 y1 = y0 + ocr_data["height"][i] * scale
-                result.spans.append(
-                    RawSpan(
-                        text=word, x0=x0, y0=y0, x1=x1, y1=y1,
-                        confidence=conf,
-                        origin="ocr",
-                    )
-                )
+                result.spans.append(RawSpan(
+                    text=word, x0=x0, y0=y0, x1=x1, y1=y1,
+                    confidence=conf, origin="ocr",
+                ))
         except ImportError:
             result.warnings.append(
-                f"Page {page_record.page_number} has no embedded text and pytesseract is not installed. "
-                "Mark as needs_ocr."
+                f"Page {page_record.page_number} has no embedded text and pytesseract is not installed."
             )
-        except Exception as e:
-            result.warnings.append(f"OCR failed on page {page_record.page_number}: {e}")
+        except Exception as exc:
+            result.warnings.append(f"OCR failed on page {page_record.page_number}: {exc}")
 
     pdf_doc.close()
 

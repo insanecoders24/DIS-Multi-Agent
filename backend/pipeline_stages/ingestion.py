@@ -106,7 +106,7 @@ def ingest_pdf(
 
         # Detect whether the page has embedded text
         text_sample = pg.get_text("text", clip=None).strip()
-        has_text = len(text_sample) > 10  # heuristic; needs OCR if False
+        has_text = len(text_sample) > 1  # lowered: even a single word means embedded text
 
         page_id = f"{document_id}:p{page_number}"
         pages.append(
