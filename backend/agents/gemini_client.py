@@ -1,31 +1,50 @@
 """
-Gemini API client — uses google-genai SDK with retry and model fallback.
+LLM API client — uses google-genai SDK with Anthropic fallback.
 
-Model priority (all on the same API key):
-  1. gemini-2.0-flash-lite   — lowest quota cost, highest RPM
-  2. gemini-2.0-flash        — fallback
-  3. gemini-2.5-flash-lite   — second fallback
-
-Retry: up to 3 attempts with 10s waits on 429.
+Model priority cascade:
+  1. Gemini models (first choice, high free-tier)
+     - gemini-2.0-flash-lite
+     - gemini-2.5-flash-lite
+     - gemini-2.0-flash
+  2. Anthropic models (fallback)
+     - claude-3-5-haiku-20241022
+     - claude-3-haiku-20240307
 """
 from __future__ import annotations
 import os
 import json
 import time
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 
 load_dotenv()
 
-_KEY = os.getenv("GEMINI_API_KEY", "")
-_client = genai.Client(api_key=_KEY) if _KEY else None
+_GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
+_ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
-# Model cascade — tiyer on quota cost
-MODELS = [
+# ── Gemini Setup ──────────────────────────────────────────────────────────────
+try:
+    from google import genai
+    from google.genai import types
+    _gemini_client = genai.Client(api_key=_GEMINI_KEY) if _GEMINI_KEY else None
+except ImportError:
+    _gemini_client = None
+
+# ── Anthropic Setup ───────────────────────────────────────────────────────────
+try:
+    import anthropic
+    _anthropic_client = anthropic.Anthropic(api_key=_ANTHROPIC_KEY) if _ANTHROPIC_KEY else None
+except ImportError:
+    _anthropic_client = None
+
+GEMINI_MODELS = [
     "gemini-2.0-flash-lite",
     "gemini-2.5-flash-lite",
     "gemini-2.0-flash",
+]
+
+ANTHROPIC_MODELS = [
+    "claude-3-5-haiku-20241022",
+    "claude-3-haiku-20240307",
 ]
 
 _DIS_SYSTEM = (
@@ -42,43 +61,69 @@ def query(
     max_tokens: int = 512,
 ) -> str:
     """
-    Query Gemini with automatic model fallback and retry on 429.
+    Query LLM with automatic model fallback (Gemini → Anthropic) and retry on 429.
     Never raises — returns a descriptive fallback string on persistent failure.
     """
-    if not _client:
-        return "[Gemini API key not configured]"
+    if not _gemini_client and not _anthropic_client:
+        return "[LLM error: Neither Gemini nor Anthropic API keys are configured]"
 
     system = _DIS_SYSTEM + (" " + system_extra if system_extra else "")
 
-    for model in MODELS:
-        for attempt in range(3):
-            try:
-                response = _client.models.generate_content(
-                    model=model,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system,
-                        temperature=temperature,
-                        max_output_tokens=max_tokens,
-                    ),
-                )
-                text = (response.text or "").strip()
-                if text:
-                    return text
-            except Exception as exc:
-                err = str(exc)
-                if "429" in err or "RESOURCE_EXHAUSTED" in err:
-                    # Rate limited — wait and retry or try next model
-                    if attempt < 2:
-                        time.sleep(12)
+    # 1. Try Gemini
+    if _gemini_client:
+        for model in GEMINI_MODELS:
+            for attempt in range(2):
+                try:
+                    response = _gemini_client.models.generate_content(
+                        model=model,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system,
+                            temperature=temperature,
+                            max_output_tokens=max_tokens,
+                        ),
+                    )
+                    text = (response.text or "").strip()
+                    if text:
+                        return text
+                except Exception as exc:
+                    err = str(exc)
+                    if "429" in err or "RESOURCE_EXHAUSTED" in err:
+                        if attempt < 1:
+                            time.sleep(8)
+                        else:
+                            break  # Try next Gemini model
+                    elif "404" in err or "NOT_FOUND" in err:
+                        break  # Try next Gemini model (not available on this key)
                     else:
-                        break  # try next model
-                elif "404" in err or "NOT_FOUND" in err:
-                    break  # model not available — try next
-                else:
-                    return f"[Gemini error: {err[:120]}]"
+                        break  # Unknown error, try next model
 
-    return "[Gemini reasoning: all models rate-limited — reasoning will resume shortly]"
+    # 2. Try Anthropic (Fallback)
+    if _anthropic_client:
+        for model in ANTHROPIC_MODELS:
+            for attempt in range(2):
+                try:
+                    response = _anthropic_client.messages.create(
+                        model=model,
+                        system=system,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                    )
+                    text = response.content[0].text.strip()
+                    if text:
+                        return text
+                except Exception as exc:
+                    err = str(exc).lower()
+                    if "rate_limit" in err or "429" in err:
+                        if attempt < 1:
+                            time.sleep(8)
+                        else:
+                            break  # Try next Anthropic model
+                    else:
+                        break  # Unknown error, try next model
+
+    return "[LLM reasoning: All Gemini and Anthropic models exhausted or rate-limited]"
 
 
 def query_json(
@@ -86,7 +131,7 @@ def query_json(
     system_extra: str = "",
     fallback: dict | None = None,
 ) -> dict:
-    """Query Gemini expecting a JSON response. Returns fallback dict on error."""
+    """Query LLM expecting a JSON response. Returns fallback dict on error."""
     raw = query(
         prompt + "\n\nRespond with valid JSON only. No markdown fences, no explanation.",
         system_extra=system_extra,

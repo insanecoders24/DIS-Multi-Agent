@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useCallback, useEffect } from "react";
 
-const API = "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_URL || (typeof window !== "undefined" && window.location.hostname !== "localhost" ? "" : "http://localhost:8000");
 const DEMO_PATH = "/Users/manishtellisim/Desktop/Birchlogic/multi-agents/backend/data/agentic_ai_curriculum.pdf";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
