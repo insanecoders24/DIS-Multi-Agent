@@ -20,6 +20,7 @@ load_dotenv()
 
 _GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 _ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+_OPENAI_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # ── Gemini Setup ──────────────────────────────────────────────────────────────
 try:
@@ -36,6 +37,13 @@ try:
 except ImportError:
     _anthropic_client = None
 
+# ── OpenAI Setup ──────────────────────────────────────────────────────────────
+try:
+    import openai
+    _openai_client = openai.OpenAI(api_key=_OPENAI_KEY) if _OPENAI_KEY else None
+except ImportError:
+    _openai_client = None
+
 GEMINI_MODELS = [
     "gemini-2.0-flash-lite",
     "gemini-2.5-flash-lite",
@@ -45,6 +53,11 @@ GEMINI_MODELS = [
 ANTHROPIC_MODELS = [
     "claude-3-5-haiku-20241022",
     "claude-3-haiku-20240307",
+]
+
+OPENAI_MODELS = [
+    "gpt-4o-mini",
+    "gpt-3.5-turbo",
 ]
 
 _DIS_SYSTEM = (
@@ -61,11 +74,11 @@ def query(
     max_tokens: int = 512,
 ) -> str:
     """
-    Query LLM with automatic model fallback (Gemini → Anthropic) and retry on 429.
+    Query LLM with automatic model fallback (Gemini → Anthropic → OpenAI) and retry on 429.
     Never raises — returns a descriptive fallback string on persistent failure.
     """
-    if not _gemini_client and not _anthropic_client:
-        return "[LLM error: Neither Gemini nor Anthropic API keys are configured]"
+    if not _gemini_client and not _anthropic_client and not _openai_client:
+        return "[LLM error: No active LLM API keys (Gemini, Anthropic, or OpenAI)]"
 
     system = _DIS_SYSTEM + (" " + system_extra if system_extra else "")
 
@@ -123,7 +136,34 @@ def query(
                     else:
                         break  # Unknown error, try next model
 
-    return "[LLM reasoning: All Gemini and Anthropic models exhausted or rate-limited]"
+    # 3. Try OpenAI (Fallback 2)
+    if _openai_client:
+        for model in OPENAI_MODELS:
+            for attempt in range(2):
+                try:
+                    response = _openai_client.chat.completions.create(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": system},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                    )
+                    text = response.choices[0].message.content.strip()
+                    if text:
+                        return text
+                except Exception as exc:
+                    err = str(exc).lower()
+                    if "429" in err or "rate limit" in err:
+                        if attempt < 1:
+                            time.sleep(8)
+                        else:
+                            break  # Try next OpenAI model
+                    else:
+                        break  # Unknown error, try next model
+
+    return "[LLM reasoning: All Gemini, Anthropic, and OpenAI models exhausted or rate-limited]"
 
 
 def query_json(
