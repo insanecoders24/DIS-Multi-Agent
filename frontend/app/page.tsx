@@ -740,54 +740,54 @@ function OutputPanel({ docId, chatExpanded, onToggleChat }: { docId: string | nu
       {tab !== "chat" && (
         <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px" }}>
           {tab === "sections" && (sections.length === 0
-            ? <p style={{ color: "#374151", fontSize: 12, textAlign: "center", paddingTop: 24 }}>No sections</p>
+            ? <p style={{ color: "#94a3b8", fontSize: 12, textAlign: "center", paddingTop: 24 }}>No sections</p>
             : sections.map(s => (
-              <div key={s.section_id} style={{ padding: `6px 0 6px ${Math.max((s.level - 1) * 12, 0)}px`, borderBottom: "1px solid #0d1117" }}>
+              <div key={s.section_id} style={{ padding: `6px 0 6px ${Math.max((s.level - 1) * 12, 0)}px`, borderBottom: "1px solid #e2e8f0" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {s.heading_number && (<span style={{ fontFamily: "monospace", fontSize: 9, color: "#374151", background: "#060c18", padding: "1px 5px", borderRadius: 3, flexShrink: 0 }}>{s.heading_number}</span>)}
-                  <span style={{ fontSize: s.level === 1 ? 12.5 : 11, fontWeight: s.level <= 2 ? 600 : 400, color: s.level === 1 ? "#e2e8f0" : s.level === 2 ? "#94a3b8" : "#4b5870", flex: 1 }}>{s.title}</span>
-                  <span style={{ fontSize: 9, color: "#1e2d3d", flexShrink: 0 }}>p{s.start_page}–{s.end_page}</span>
+                  {s.heading_number && (<span style={{ fontFamily: "monospace", fontSize: 9, color: "#64748b", background: "#f8fafc", padding: "1px 5px", borderRadius: 3, flexShrink: 0 }}>{s.heading_number}</span>)}
+                  <span style={{ fontSize: s.level === 1 ? 12.5 : 11, fontWeight: s.level <= 2 ? 600 : 400, color: s.level === 1 ? "#0f172a" : s.level === 2 ? "#334155" : "#475569", flex: 1 }}>{s.title}</span>
+                  <span style={{ fontSize: 9, color: "#94a3b8", flexShrink: 0 }}>p{s.start_page}–{s.end_page}</span>
                 </div>
               </div>
             ))
           )}
           {tab === "tables" && (tables.length === 0
-            ? <p style={{ color: "#374151", fontSize: 12, textAlign: "center", paddingTop: 24 }}>No tables</p>
+            ? <p style={{ color: "#94a3b8", fontSize: 12, textAlign: "center", paddingTop: 24 }}>No tables</p>
             : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {tables.map(t => (
-                <div key={t.table_id} style={{ background: "#060c18", border: "1px solid #0d2218", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontWeight: 700, fontSize: 12, color: "#4ade80", marginBottom: 3 }}>{t.caption || `Table ${t.table_number || t.table_id.slice(0, 8)}`}</div>
-                  <div style={{ fontSize: 10, color: "#374151" }}>{t.row_count}×{t.column_count} · Page {t.start_page}</div>
+                <div key={t.table_id} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontWeight: 700, fontSize: 12, color: "#16a34a", marginBottom: 3 }}>{t.caption || `Table ${t.table_number || t.table_id.slice(0, 8)}`}</div>
+                  <div style={{ fontSize: 10, color: "#64748b" }}>{t.row_count}×{t.column_count} · Page {t.start_page}</div>
                   <div style={{ marginTop: 6 }}><ConfBar v={t.confidence_score || 1} height={3} /></div>
                 </div>
               ))}
             </div>
           )}
           {tab === "refs" && (refs.length === 0
-            ? <p style={{ color: "#374151", fontSize: 12, textAlign: "center", paddingTop: 24 }}>No references</p>
+            ? <p style={{ color: "#94a3b8", fontSize: 12, textAlign: "center", paddingTop: 24 }}>No references</p>
             : refs.map(r => (
-              <div key={r.ref_id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #0d1117" }}>
-                <span style={{ fontSize: 10, color: r.is_resolved ? "#4ade80" : "#f87171", fontWeight: 700, flexShrink: 0 }}>{r.is_resolved ? "Resolved" : "Unresolved"}</span>
-                <span style={{ fontSize: 11, color: "#e2e8f0", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.ref_text}</span>
-                <span style={{ fontSize: 9, color: "#374151", flexShrink: 0 }}>{r.ref_type}</span>
+              <div key={r.ref_id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #e2e8f0" }}>
+                <span style={{ fontSize: 10, color: r.is_resolved ? "#16a34a" : "#dc2626", fontWeight: 700, flexShrink: 0 }}>{r.is_resolved ? "Resolved" : "Unresolved"}</span>
+                <span style={{ fontSize: 11, color: "#334155", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.ref_text}</span>
+                <span style={{ fontSize: 9, color: "#94a3b8", flexShrink: 0 }}>{r.ref_type}</span>
               </div>
             ))
           )}
-          {tab === "quality" && !quality && (<p style={{ color: "#374151", fontSize: 12, textAlign: "center", paddingTop: 24 }}>Quality report not available</p>)}
+          {tab === "quality" && !quality && (<p style={{ color: "#94a3b8", fontSize: 12, textAlign: "center", paddingTop: 24 }}>Quality report not available</p>)}
           {tab === "quality" && quality && (
             <div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 12 }}>
-                {[["Critical", quality.critical, "#ef4444"], ["High", quality.high, "#f59e0b"], ["Total", quality.total_flags, "#60a5fa"]].map(([l, v, c]) => (
-                  <div key={String(l)} style={{ background: "#060c18", border: `1px solid ${String(c)}25`, borderRadius: 8, padding: "10px 6px", textAlign: "center" }}>
+                {[["Critical", quality.critical, "#dc2626"], ["High", quality.high, "#d97706"], ["Total", quality.total_flags, "#2563eb"]].map(([l, v, c]) => (
+                  <div key={String(l)} style={{ background: "#f8fafc", border: `1px solid ${String(c)}40`, borderRadius: 8, padding: "10px 6px", textAlign: "center" }}>
                     <div style={{ fontSize: 22, fontWeight: 800, color: String(c) }}>{String(v)}</div>
-                    <div style={{ fontSize: 9, color: "#374151", marginTop: 1 }}>{String(l)}</div>
+                    <div style={{ fontSize: 9, color: "#64748b", marginTop: 1 }}>{String(l)}</div>
                   </div>
                 ))}
               </div>
               {quality.gemini_assessment && (
-                <div style={{ background: "#0a0618", border: "1px solid #2d1f5e", borderRadius: 8, padding: "12px 14px", borderLeft: "3px solid #7c3aed" }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: "#5b21b6", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 8 }}>Gemini Risk Assessment</div>
-                  <div style={{ fontSize: 11.5, color: "#c4b5fd", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{quality.gemini_assessment}</div>
+                <div style={{ background: "#faf5ff", border: "1px solid #e9d5ff", borderRadius: 8, padding: "12px 14px", borderLeft: "3px solid #7c3aed" }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#6d28d9", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: 8 }}>Gemini Risk Assessment</div>
+                  <div style={{ fontSize: 11.5, color: "#4c1d95", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{quality.gemini_assessment}</div>
                 </div>
               )}
             </div>
@@ -1178,7 +1178,7 @@ export default function HomePage() {
 
         {/* RIGHT: STRUCTURED OUTPUT + CHAT */}
         <aside style={{
-          background: "#060c18", borderLeft: "1px solid #0d1825",
+          background: "#ffffff", borderLeft: "1px solid #e2e8f0",
           display: "flex", flexDirection: "column", overflow: "hidden",
           transition: "width .25s ease",
         }}>
