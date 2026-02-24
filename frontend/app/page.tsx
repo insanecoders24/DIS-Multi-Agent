@@ -698,20 +698,14 @@ function OutputPanel({ docId, chatExpanded, onToggleChat }: { docId: string | nu
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Tab bar + collapse toggle */}
-      <div style={{ display: "flex", alignItems: "center", padding: "8px 10px", gap: 3, borderBottom: "1px solid #e2e8f0", flexShrink: 0, background: tab === "chat" ? "#ffffff" : "#060c18" }}>
+      <div style={{ display: "flex", alignItems: "center", padding: "8px 10px", gap: 3, borderBottom: "1px solid #e2e8f0", flexShrink: 0, background: "#ffffff" }}>
         {tabs.map(t => (
           <button key={t.k} onClick={() => setTab(t.k)} style={{
             padding: "4px 10px", borderRadius: 5, fontSize: 10, fontWeight: 600,
             border: "1px solid", cursor: "pointer", transition: "all .15s",
-            background: tab === t.k
-              ? (t.k === "chat" ? "#1e293b" : "rgba(99,102,241,.12)")
-              : (t.k === "chat" ? "transparent" : "transparent"),
-            borderColor: tab === t.k
-              ? (t.k === "chat" ? "#1e293b" : "rgba(99,102,241,.35)")
-              : (t.k === "chat" ? "#e2e8f0" : "#1e2535"),
-            color: tab === t.k
-              ? (t.k === "chat" ? "#ffffff" : "#818cf8")
-              : (t.k === "chat" ? "#64748b" : "#374151"),
+            background: tab === t.k ? "#1e293b" : "transparent",
+            borderColor: tab === t.k ? "#1e293b" : "transparent",
+            color: tab === t.k ? "#ffffff" : "#64748b",
           }}>{t.l}</button>
         ))}
         {/* Collapse / expand button */}
@@ -720,12 +714,12 @@ function OutputPanel({ docId, chatExpanded, onToggleChat }: { docId: string | nu
           title={chatExpanded ? "Collapse panel" : "Expand panel"}
           style={{
             marginLeft: "auto", padding: "4px 8px", borderRadius: 5, cursor: "pointer",
-            background: "transparent", border: `1px solid ${tab === "chat" ? "#e2e8f0" : "#1e2535"}`,
-            color: tab === "chat" ? "#64748b" : "#374151", fontSize: 12, lineHeight: 1,
+            background: "transparent", border: "1px solid #e2e8f0",
+            color: "#64748b", fontSize: 12, lineHeight: 1,
             transition: "all .15s", display: "flex", alignItems: "center", gap: 4,
           }}
-          onMouseEnter={e => (e.currentTarget.style.borderColor = tab === "chat" ? "#94a3b8" : "#374151")}
-          onMouseLeave={e => (e.currentTarget.style.borderColor = tab === "chat" ? "#e2e8f0" : "#1e2535")}
+          onMouseEnter={e => (e.currentTarget.style.borderColor = "#94a3b8")}
+          onMouseLeave={e => (e.currentTarget.style.borderColor = "#e2e8f0")}
         >
           {chatExpanded
             ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="13 17 18 12 13 7" /><polyline points="6 17 11 12 6 7" /></svg>
