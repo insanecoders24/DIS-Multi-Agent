@@ -1,0 +1,39 @@
+service: dis-multi-agent-api
+
+provider:
+  name: aws
+  runtime: python3.10 # or use the version matching your python env
+  region: us-east-1
+  memorySize: 2048 # Increased memory because of PyMuPDF, Anthropic/Gemini/OpenAI parsing, and PDF reading operations
+  timeout: 300 # Limit is 900s for Lambda
+  environment:
+    # Any variables loaded from your .env will automatically be populated in Lambda!
+    # Serverless-dotenv-plugin handles this injection magically, BUT you can explicitly declare them too:
+    OPENAI_API_KEY: ${env:OPENAI_API_KEY, ''}
+    GEMINI_API_KEY: ${env:GEMINI_API_KEY, ''}
+    ANTHROPIC_API_KEY: ${env:ANTHROPIC_API_KEY, ''}
+    NEXT_PUBLIC_API_URL: ${env:NEXT_PUBLIC_API_URL, ''}
+    DATABASE_URL: ${env:DATABASE_URL, ''}
+    SUPABASE_URL: ${env:SUPABASE_URL, ''}
+    SUPABASE_KEY: ${env:SUPABASE_KEY, ''}
+
+functions:
+  api:
+    handler: handler.handler
+    events:
+      - httpApi:
+          path: /
+          method: '*'
+      - httpApi:
+          path: /{proxy+}
+          method: '*'
+
+plugins:
+  - serverless-python-requirements
+  - serverless-dotenv-plugin
+
+custom:
+  pythonRequirements:
+    dockerizePip: false
+    pipCmdExtraArgs: "--platform manylinux2014_x86_64 --only-binary=:all:"
+    slim: true
