@@ -21,6 +21,7 @@ import fitz  # PyMuPDF
 
 import config
 from models.entities import Document, Page
+from supabase_client import get_supabase
 
 
 def compute_sha256(path: str) -> str:
@@ -65,6 +66,18 @@ def ingest_pdf(
     if not os.path.exists(stored_path):
         shutil.copy2(source_path, stored_path)
 
+    supabase = get_supabase()
+    if supabase:
+        try:
+            with open(stored_path, "rb") as f:
+                supabase.storage.from_("documents").upload(
+                    path=f"{document_id}.pdf",
+                    file=f,
+                    file_options={"content-type": "application/pdf"}
+                )
+        except Exception:
+            pass  # Likely already exists or bucket missing
+
     file_size = os.path.getsize(source_path)
 
     # Open PDF
@@ -103,6 +116,17 @@ def ingest_pdf(
         pix = pg.get_pixmap(matrix=mat, alpha=False)
         image_path = str(image_dir / f"p{page_number:04d}.png")
         pix.save(image_path)
+
+        if supabase:
+            try:
+                with open(image_path, "rb") as f:
+                    supabase.storage.from_("page-images").upload(
+                        path=f"{document_id}/p{page_number:04d}.png",
+                        file=f,
+                        file_options={"content-type": "image/png"}
+                    )
+            except Exception:
+                pass
 
         # Detect whether the page has embedded text
         text_sample = pg.get_text("text", clip=None).strip()
