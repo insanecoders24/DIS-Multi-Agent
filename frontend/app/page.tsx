@@ -1,5 +1,7 @@
 "use client";
 import { useState, useRef, useCallback, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const API = process.env.NEXT_PUBLIC_API_URL || (typeof window !== "undefined" && window.location.hostname !== "localhost" ? "" : "http://localhost:8000");
 const DEMO_PATH = "/Users/manishtellisim/Desktop/Birchlogic/multi-agents/backend/data/agentic_ai_curriculum.pdf";
@@ -534,10 +536,28 @@ function ChatPanel({ docId }: { docId: string | null }) {
                   <div style={{
                     background: "#f8fafc", border: "1px solid #e2e8f0",
                     borderRadius: "2px 10px 10px 10px",
-                    padding: "11px 14px", fontSize: 12.5, color: "#1e293b", lineHeight: 1.8,
-                    whiteSpace: "pre-wrap",
+                    padding: "11px 14px", fontSize: 13, color: "#1e293b", lineHeight: 1.6,
                   }}>
-                    {msg.text}
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p: ({ node, ...props }) => <p style={{ margin: "0 0 10px 0" }} {...props} />,
+                        ul: ({ node, ...props }) => <ul style={{ margin: "0 0 10px 18px", padding: 0 }} {...props} />,
+                        ol: ({ node, ...props }) => <ol style={{ margin: "0 0 10px 18px", padding: 0 }} {...props} />,
+                        li: ({ node, ...props }) => <li style={{ marginBottom: 4 }} {...props} />,
+                        h3: ({ node, ...props }) => <h3 style={{ fontSize: 14, fontWeight: 700, margin: "14px 0 6px 0", color: "#0f172a" }} {...props} />,
+                        h4: ({ node, ...props }) => <h4 style={{ fontSize: 13, fontWeight: 600, margin: "12px 0 6px 0", color: "#1e293b" }} {...props} />,
+                        strong: ({ node, ...props }) => <strong style={{ fontWeight: 600, color: "#0f172a" }} {...props} />,
+                        code: ({ node, ...props }) => <code style={{ background: "#f1f5f9", padding: "2px 4px", borderRadius: 4, fontFamily: "monospace", fontSize: 11.5 }} {...props} />,
+                        pre: ({ node, ...props }) => <pre style={{ background: "#f1f5f9", padding: "10px", borderRadius: 6, overflowX: "auto", margin: "10px 0", fontSize: 12 }} {...props} />,
+                        a: ({ node, ...props }) => <a style={{ color: "#3b82f6", textDecoration: "none" }} {...props} />,
+                        table: ({ node, ...props }) => <table style={{ borderCollapse: "collapse", width: "100%", margin: "10px 0", fontSize: 12 }} {...props} />,
+                        th: ({ node, ...props }) => <th style={{ borderBottom: "1px solid #cbd5e1", padding: "6px 8px", textAlign: "left", fontWeight: 600, background: "#f8fafc" }} {...props} />,
+                        td: ({ node, ...props }) => <td style={{ borderBottom: "1px solid #e2e8f0", padding: "6px 8px" }} {...props} />,
+                      }}
+                    >
+                      {msg.text}
+                    </ReactMarkdown>
                   </div>
 
                   {/* Sources */}
