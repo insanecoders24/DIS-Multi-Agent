@@ -9,9 +9,8 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from supabase_client import get_supabase
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -36,7 +35,7 @@ app.add_middleware(
 )
 
 
-_UPLOAD_DIR = "/tmp/storage/uploads" if os.getenv("VERCEL") or os.getenv("AWS_EXECUTION_ENV") else "storage/uploads"
+_UPLOAD_DIR = "/tmp/storage/uploads" if os.getenv("VERCEL") else "storage/uploads"
 
 @app.on_event("startup")
 def startup():
@@ -373,13 +372,6 @@ def get_uncertainty_report(document_id: str):
 
 @app.get("/api/documents/{document_id}/pages/{page_number}/image")
 def get_page_image(document_id: str, page_number: int):
-    supabase = get_supabase()
-    if supabase:
-        # Generate a public URL for the page image (assuming "page-images" is a public bucket)
-        path = f"{document_id}/p{page_number:04d}.png"
-        res = supabase.storage.from_("page-images").get_public_url(path)
-        return RedirectResponse(url=res)
-
     img_path = Path(config.PAGE_IMAGE_DIR) / document_id / f"p{page_number:04d}.png"
     if not img_path.exists():
         raise HTTPException(status_code=404, detail="Page image not found.")

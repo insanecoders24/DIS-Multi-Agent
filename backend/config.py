@@ -8,7 +8,7 @@ import os
 
 DIS_VERSION = "1.0.0"
 
-_BASE_DIR = "/tmp/storage" if os.getenv("VERCEL") or os.getenv("AWS_EXECUTION_ENV") else "storage"
+_BASE_DIR = "/tmp/storage" if os.getenv("VERCEL") else "storage"
 
 # ── Storage ──────────────────────────────────────────────────────────────────
 PDF_STORAGE_DIR = f"{_BASE_DIR}/pdfs"
